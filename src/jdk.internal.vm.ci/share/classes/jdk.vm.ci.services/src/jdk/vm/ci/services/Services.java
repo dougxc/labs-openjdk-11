@@ -37,7 +37,7 @@ import java.util.ServiceLoader;
 import java.util.Set;
 
 import jdk.internal.misc.VM;
-// XXX import jdk.internal.reflect.Reflection;
+import jdk.internal.reflect.Reflection;
 
 /**
  * Provides utilities needed by JVMCI clients.
