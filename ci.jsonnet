@@ -12,7 +12,8 @@
             # Don't fake ln by copying files
             MSYS: "winsymlinks:nativestrict",
             # Prevent expansion of `/` in args
-            MSYS2_ARG_CONV_EXCL: "-Fe;/Gy"
+            MSYS2_ARG_CONV_EXCL: "-Fe;/Gy",
+            ZLIB_BUNDLING: "bundled"
         },
         setup+: [
             # Initialize MSYS2
@@ -103,6 +104,7 @@
     Build:: {
         environment: {
             MAKE : "make",
+            ZLIB_BUNDLING: "system"
         },
         packages+: {
             "pip:astroid" : "==1.1.0",
@@ -120,6 +122,7 @@
                           "--with-native-debug-symbols=none",
                           "--with-jvm-variants=server",
                           "--disable-warnings-as-errors",
+                          "--with-zlib=${ZLIB_BUNDLING}",
                           "--with-boot-jdk=${JAVA_HOME}",
                           "--with-devkit=${DEVKIT}"],
             ["$MAKE", "CONF=release", "images"],
@@ -130,6 +133,7 @@
                           "--with-native-debug-symbols=external",
                           "--with-jvm-variants=server",
                           "--disable-warnings-as-errors",
+                          "--with-zlib=${ZLIB_BUNDLING}",
                           "--with-boot-jdk=${JAVA_HOME}",
                           "--with-devkit=${DEVKIT}"],
             ["$MAKE", "CONF=fastdebug", "images"],
@@ -152,6 +156,7 @@
                 ["sh", "configure", "--with-debug-level=release",
                               "--disable-warnings-as-errors",
                               "--with-native-debug-symbols=none",
+                              "--with-zlib=${ZLIB_BUNDLING}",
                               "--with-boot-jdk=${JAVA_HOME}",
                               "--with-devkit=${DEVKIT}"],
                 ["$MAKE", "CONF=release", "static-libs-image"],
@@ -161,6 +166,7 @@
                 ["sh", "configure", "--with-debug-level=fastdebug",
                               "--disable-warnings-as-errors",
                               "--with-native-debug-symbols=external",
+                              "--with-zlib=${ZLIB_BUNDLING}",
                               "--with-boot-jdk=${JAVA_HOME}",
                               "--with-devkit=${DEVKIT}"],
                 ["$MAKE", "CONF=fastdebug", "static-libs-image"],
