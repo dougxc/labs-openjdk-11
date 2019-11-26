@@ -74,6 +74,7 @@ def main():
     parser.add_argument('--jvmci-version', action='store', help='JVMCI version (e.g., 19.3-b03)', required=True)
     parser.add_argument('--ci-platform', action='store', help='target platform in CI terminology (e.g, darin-amd64)', required=True)
     parser.add_argument('--target-dir', action='store', help='directory in which the labsjdk image will be created', required=True)
+    parser.add_argument('--clean', action='store_true', help='delete build directory after creating labsjdk', required=True)
     parser.add_argument('--conf', action='store', help='configuration of the build', required=True)
 
     opts = parser.parse_args()
@@ -103,12 +104,19 @@ def main():
               glob.glob(join(my_dir, 'build', opts.conf, 'bundles', '*_bin-static-libs' + debug_qualifier + '.tar.gz'))
 
     for bundle in bundles:
+        log('Extracting {} in {}'.format(bundle, target_dir))
         if bundle.endswith('.zip'):
             with zipfile.ZipFile(bundle) as zf:
                 zf.extractall(target_dir)
         else:
             with tarfile.open(bundle, 'r:gz') as tf:
                 tf.extractall(target_dir)
+
+    if opts.clean:
+        conf_build_dir = join(my_dir, 'build', opts.conf)
+        # Use `rm -rf` instead of shutil.rmtree to avoid problems with
+        # read-only files on Windows (https://stackoverflow.com/questions/1889597/deleting-directory-in-python)
+        check_call(['rm', '-rf', conf_build_dir])
 
     def _get_single_entry(directory):
         entries = os.listdir(directory)

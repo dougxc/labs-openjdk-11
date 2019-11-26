@@ -1,31 +1,10 @@
 {
-    WindowsMsys2:: {
-        downloads+: {
-            MSYS2: {name: "msys2", version: "20190524", platformspecific: true},
-            DEVKIT: {name: "devkit", version: "VS2017-15.5.5", platformspecific: true},
-        },
-        capabilities+: ["windows"],
-        name+: "-windows-msys2",
-        environment+: {
-            CI_OS: "windows",
-            JIB_OS: "windows",
-            JIB_PLATFORM_OS: "windows",
-            SEP: "\\",
-            PATH: "$MSYS2\\usr\\bin;$PATH",
-            # Don't fake ln by copying files
-            MSYS: "winsymlinks:nativestrict",
-            # Prevent expansion of `/` in args
-            MSYS2_ARG_CONV_EXCL: "-Fe;/Gy",
-            ZLIB_BUNDLING: "bundled"
-        },
-        setup+: [
-            # Initialize MSYS2
-            ["bash", "--login"],
-        ],
-    },
     WindowsCygwin:: {
         downloads+: {
             CYGWIN: {name: "cygwin", version: "3.0.7", platformspecific: true},
+        },
+        packages : {
+            "devkit:VS2017-15.5.5+1" : "==0"
         },
         capabilities+: ["windows"],
         name+: "-windows-cygwin",
@@ -34,7 +13,7 @@
             JIB_OS: "windows",
             JIB_PLATFORM_OS: "windows",
             SEP: "\\",
-            PATH: "$CYGWIN\\bin;$PATH",
+            JIB_PATH: "$CYGWIN\\bin;$PATH",
             ZLIB_BUNDLING: "bundled"
         },
         setup+: [
@@ -141,6 +120,7 @@
 
     Build:: {
         environment: {
+            JIB_PATH: "${PATH}",
             MAKE : "make",
             ZLIB_BUNDLING: "system"
         },
@@ -153,37 +133,52 @@
         diskspace_required: "10G",
         logs: ["*.log"],
         targets: ["gate"],
+        setup: [
+            ["set-export", "LABSJDK_DIR", "..${SEP}labsjdk"]
+        ]
     },
 
     WithJib:: {
-        setup : [
-            ["set-export", "JIB_DATA_DIR", "${PWD}${SEP}..${SEP}jib"],
-            ["set-export", "JIB_SERVER", "https://java.se.oracle.com/artifactory"],
-            ["set-export", "JIB_SERVER_MIRRORS", "https://jpg.uk.oracle.com/artifactory http://artifactory-sth.se.oracle.com:8081/artifactory"]
+        setup+: [
+            ["export", "JIB_DATA_DIR=${PWD}${SEP}..${SEP}jib"],
+            ["export", "JIB_SERVER=https://java.se.oracle.com/artifactory"],
+            ["export", "JIB_SERVER_MIRRORS=https://jpg.uk.oracle.com/artifactory http://artifactory-sth.se.oracle.com:8081/artifactory"]
         ],
-        run: [
+        run+: [
+            # This restricts cygwin to be on the PATH only while using jib.
+            # It must not be on the PATH when building Graal.
+            ["export", "OLD_PATH=${PATH}"],
+            ["export", "PATH=${JIB_PATH}"],
+
             # Make release build
             ["bash", "bin/jib.sh", "configure", "-p", "${JIB_OS}-${JIB_ARCH}-open"],
-            ["bash", "bin/jib.sh", "make", "-c", "${JIB_OS}-${JIB_ARCH}-open", "--", "product-bundles", "static-libs-bundles"],
+            ["bash", "bin/jib.sh", "make", "-c", "${JIB_OS}-${JIB_ARCH}-open", "--", "product-bundles", "static-libs-bundles", ">", "make-release.log"],
             ["python", ".make_labsjdk.py", "--jvmci-version=" + jvmci_version,
                                            "--ci-platform=${CI_OS}-${CI_ARCH}",
-                                           "--target-dir=build${SEP}release",
-                                           "--conf=${JIB_OS}-${JIB_ARCH}-open"],
-            ["build${SEP}release${SEP}java_home${SEP}bin${SEP}java", "-version"],
+                                           "--target-dir=${LABSJDK_DIR}${SEP}release",
+                                           "--conf=${JIB_OS}-${JIB_ARCH}-open",
+                                           "--clean"],
+            ["${LABSJDK_DIR}${SEP}release${SEP}java_home${SEP}bin${SEP}java", "-version"],
 
             # Make fastdebug build
             ["bash", "bin/jib.sh", "configure", "-p", "${JIB_OS}-${JIB_ARCH}-open-debug"],
-            ["bash", "bin/jib.sh", "make", "-c", "${JIB_OS}-${JIB_ARCH}-open-debug", "--", "product-bundles", "static-libs-bundles"],
+            ["bash", "bin/jib.sh", "make", "-c", "${JIB_OS}-${JIB_ARCH}-open-debug", "--", "product-bundles", "static-libs-bundles", ">", "make-fastdebug.log"],
             ["python", ".make_labsjdk.py", "--jvmci-version=" + jvmci_version,
                                            "--ci-platform=${CI_OS}-${CI_ARCH}",
-                                           "--target-dir=build${SEP}fastdebug",
-                                           "--conf=${JIB_OS}-${JIB_ARCH}-open-debug"],
-            ["build${SEP}fastdebug${SEP}java_home${SEP}bin${SEP}java", "-version"],
+                                           "--target-dir=${LABSJDK_DIR}${SEP}fastdebug",
+                                           "--conf=${JIB_OS}-${JIB_ARCH}-open-debug",
+                                           "--clean"],
+            ["${LABSJDK_DIR}${SEP}fastdebug${SEP}java_home${SEP}bin${SEP}java", "-version"],
+
+            ["export", "PATH=${OLD_PATH}"],
+
+            # Set up JAVA_HOME for running Graal downstream
+            ["export", "JAVA_HOME=${LABSJDK_DIR}${SEP}release${SEP}java_home"],
         ],
     },
 
     WithoutJib:: {
-        run: [
+        run+: [
             # Make release build
             ["sh", "configure",
                         "--with-conf-name=${CI_OS}-${CI_ARCH}-open",
@@ -194,12 +189,13 @@
                         "--with-zlib=${ZLIB_BUNDLING}",
                         "--with-boot-jdk=${JAVA_HOME}",
                         "--with-devkit=${DEVKIT}"],
-            ["$MAKE", "CONF=${CI_OS}-${CI_ARCH}-open", "product-bundles", "static-libs-bundles"],
+            ["$MAKE", "CONF=${CI_OS}-${CI_ARCH}-open", "product-bundles", "static-libs-bundles", ">", "make-release.log"],
             ["python", ".make_labsjdk.py", "--jvmci-version=" + jvmci_version,
                                            "--ci-platform=${CI_OS}-${CI_ARCH}",
-                                           "--target-dir=build${SEP}release",
-                                           "--conf=${CI_OS}-${CI_ARCH}-open"],
-            ["build${SEP}release${SEP}java_home${SEP}bin${SEP}java", "-version"],
+                                           "--target-dir=${LABSJDK_DIR}${SEP}release",
+                                           "--conf=${CI_OS}-${CI_ARCH}-open",
+                                           "--clean"],
+            ["${LABSJDK_DIR}${SEP}release${SEP}java_home${SEP}bin${SEP}java", "-version"],
 
             # Make fastdebug build
             ["sh", "configure",
@@ -211,23 +207,71 @@
                         "--with-zlib=${ZLIB_BUNDLING}",
                         "--with-boot-jdk=${JAVA_HOME}",
                         "--with-devkit=${DEVKIT}"],
-            ["$MAKE", "CONF=${CI_OS}-${CI_ARCH}-open-debug", "product-bundles", "static-libs-bundles"],
+            ["$MAKE", "CONF=${CI_OS}-${CI_ARCH}-open-debug", "product-bundles", "static-libs-bundles", ">", "make-fastdebug.log"],
             ["python", ".make_labsjdk.py", "--jvmci-version=" + jvmci_version,
                                            "--ci-platform=${CI_OS}-${CI_ARCH}",
-                                           "--target-dir=build${SEP}fastdebug",
-                                           "--conf=${CI_OS}-${CI_ARCH}-open-debug"],
-            ["build${SEP}fastdebug${SEP}java_home${SEP}bin${SEP}java", "-version"],
+                                           "--target-dir=${LABSJDK_DIR}${SEP}fastdebug",
+                                           "--conf=${CI_OS}-${CI_ARCH}-open-debug",
+                                           "--clean"],
+            ["${LABSJDK_DIR}${SEP}fastdebug${SEP}java_home${SEP}bin${SEP}java", "-version"],
+
+            # Set up JAVA_HOME for running Graal downstream
+            ["set-export", "JAVA_HOME", "${LABSJDK_DIR}${SEP}release${SEP}java_home"],
+        ]
+    },
+
+    # Downstream Graal branch to test against. If not master, then
+    # the branch must exist on both graal and graal-enterprise to
+    # ensure a consistent downstream code base is tested against.
+    local downstream_branch = "master",
+
+    CheckoutGraal:: {
+        run+: [
+            ["set-export", "GRAAL_REPO_URL", ["mx", "urlrewrite", "https://github.com/graalvm/graal.git"]],
+            ["set-export", "GRAAL_ENTERPRISE_REPO_URL", ["mx", "urlrewrite", "https://github.com/graalvm/graal-enterprise.git"]],
+
+            ["git", "clone", "${GRAAL_REPO_URL}"],
+            ["git", "clone", "${GRAAL_ENTERPRISE_REPO_URL}"],
+
+            # Check both repos out on the same downstream branch
+            ["set-export", "DUMMY_VAR_TO_ALLOW_USE_OF_NESTED_LIST_AS_SUBEXPRESSION",
+             ["git", "-C", "graal",            "checkout", downstream_branch, "&&",
+              "git", "-C", "graal-enterprise", "checkout", downstream_branch], "||", "true"],
+        ]
+    },
+
+    GraalTest:: {
+        run+: [
+            ["mx", "-p", "graal-enterprise/graal-enterprise", "gate", "--tags", "build,test,bootstraplite"]
+        ]
+    },
+
+    # Build a basic GraalVM and run some simple tests.
+    GraalVMTest:: {
+        timelimit: "1:30:00",
+        local jsvm = ["mx", "-p", "graal-enterprise/vm-enterprise", "--dynamicimports", "/graal-js,/substratevm-enterprise", "--components=Graal.js,TRegex,Native Image Enterprise", "--native-images=js"],
+        run+: [
+            # Build and test JavaScript on GraalVM
+            jsvm + ["build"],
+            ["set-export", "GRAALVM_HOME", jsvm + ["graalvm-home"]],
+            ["${GRAALVM_HOME}/bin/js",          "test/nashorn/opt/add.js"],
+            ["${GRAALVM_HOME}/bin/js", "--jvm", "test/nashorn/opt/add.js"],
+
+             # Build and test LibGraal
+            ["mx", "-p", "graal-enterprise/vm-enterprise", "--env", "libgraal-enterprise", "--extra-image-builder-argument=-J-esa", "--extra-image-builder-argument=-H:+ReportExceptionStackTraces", "build"],
+            ["mx", "-p", "graal-enterprise/vm-enterprise", "--env", "libgraal-enterprise", "gate", "--task", "LibGraal"],
         ]
     },
 
     builds: [
-        self.Build + self.WithJib + mach
+        self.CheckoutGraal + self.Build + self.WithJib + mach
         for mach in [
-            self.Linux + self.AMD64,
-            self.Darwin + self.Mojave + self.AMD64,
-            self.WindowsCygwin + self.AMD64,
+            self.Linux + self.AMD64 + self.GraalVMTest + self.GraalTest,
+            self.Darwin + self.Mojave + self.AMD64 + self.GraalVMTest + self.GraalTest,
+            self.WindowsCygwin + self.AMD64 + self.GraalTest,
         ]
     ] + [
-        self.Build + self.WithoutJib + self.Linux + self.AArch64 + self.OracleJDK
+        # GR-18864 prevents self.GraalVMTest
+        self.CheckoutGraal + self.Build + self.WithoutJib + self.Linux + self.AArch64 + self.OracleJDK + self.GraalTest
     ]
 }
