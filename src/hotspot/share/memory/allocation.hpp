@@ -120,6 +120,7 @@ enum MemoryType {
   mtCode,              // memory for generated code
   mtGC,                // memory for GC
   mtCompiler,          // memory for compiler
+  mtJVMCI,             // memory for JVMCI
   mtInternal,          // memory used by VM, but does not belong to
                        // any of above categories, and not used for
                        // native memory tracking

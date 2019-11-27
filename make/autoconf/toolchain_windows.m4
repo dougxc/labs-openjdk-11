@@ -115,7 +115,7 @@ AC_DEFUN([TOOLCHAIN_CHECK_POSSIBLE_VISUAL_STUDIO_ROOT],
         VCVARSFILES="vc/bin/vcvars32.bat vc/auxiliary/build/vcvars32.bat"
       else
         VCVARSFILES="vc/bin/amd64/vcvars64.bat vc/bin/x86_amd64/vcvarsx86_amd64.bat \
-            vc/auxiliary/build/vcvarsx86_amd64.bat vc/auxiliary/build/vcvars64.bat"
+            vc/auxiliary/build/vcvars64.bat vc/auxiliary/build/vcvarsx86_amd64.bat"
       fi
 
       for VCVARSFILE in $VCVARSFILES; do
@@ -406,7 +406,7 @@ AC_DEFUN([TOOLCHAIN_SETUP_VISUAL_STUDIO_ENV],
       # The | cat is to stop SetEnv.Cmd to mess with system colors on msys.
       # Change directory so we don't need to mess with Windows paths in redirects.
       cd $VS_ENV_TMP_DIR
-      cmd /c extract-vs-env.bat | $CAT
+      cmd //c extract-vs-env.bat | $CAT
       cd $CURDIR
 
       if test ! -s $VS_ENV_TMP_DIR/set-vs-env.sh; then

@@ -84,6 +84,9 @@ class GCTaskQueue;
 class ThreadClosure;
 class IdealGraphPrinter;
 
+class JVMCIEnv;
+class JVMCIPrimitiveArray;
+
 class Metadata;
 template <class T, MEMFLAGS F> class ChunkedList;
 typedef ChunkedList<Metadata*, mtInternal> MetadataOnStackBuffer;
@@ -275,6 +278,14 @@ class Thread: public ThreadShadow {
   void enter_signal_handler() { _num_nested_signal++; }
   void leave_signal_handler() { _num_nested_signal--; }
   bool is_inside_signal_handler() const { return _num_nested_signal > 0; }
+
+  // Determines if a heap allocation failure will be retried
+  // (e.g., by deoptimizing and re-executing in the interpreter).
+  // In this case, the failed allocation must raise
+  // Universe::out_of_memory_error_retry() and omit side effects
+  // such as JVMTI events and handling -XX:+HeapDumpOnOutOfMemoryError
+  // and -XX:OnOutOfMemoryError.
+  virtual bool in_retryable_allocation() const { return false; }
 
 #ifdef ASSERT
   void set_suspendible_thread() {
@@ -1019,12 +1030,13 @@ class JavaThread: public Thread {
   // Specifies if the DeoptReason for the last uncommon trap was Reason_transfer_to_interpreter
   bool      _pending_transfer_to_interpreter;
 
-  // Guard for re-entrant call to JVMCIRuntime::adjust_comp_level
-  bool      _adjusting_comp_level;
+  // True if in a runtime call from compiled code that will deoptimize
+  // and re-execute a failed heap allocation in the interpreter.
+  bool      _in_retryable_allocation;
 
   // An id of a speculation that JVMCI compiled code can use to further describe and
   // uniquely identify the  speculative optimization guarded by the uncommon trap
-  long       _pending_failed_speculation;
+  jlong     _pending_failed_speculation;
 
   // These fields are mutually exclusive in terms of live ranges.
   union {
@@ -1041,7 +1053,12 @@ class JavaThread: public Thread {
 
  public:
   static jlong* _jvmci_old_thread_counters;
-  static void collect_counters(typeArrayOop array);
+  static void collect_counters(jlong* array, int length);
+
+  bool resize_counters(int current_size, int new_size);
+
+  static bool resize_all_jvmci_counters(int new_size);
+
  private:
 #endif // INCLUDE_JVMCI
 
@@ -1432,16 +1449,17 @@ class JavaThread: public Thread {
 
 #if INCLUDE_JVMCI
   int  pending_deoptimization() const             { return _pending_deoptimization; }
-  long  pending_failed_speculation() const         { return _pending_failed_speculation; }
-  bool adjusting_comp_level() const               { return _adjusting_comp_level; }
-  void set_adjusting_comp_level(bool b)           { _adjusting_comp_level = b; }
+  jlong pending_failed_speculation() const        { return _pending_failed_speculation; }
   bool has_pending_monitorenter() const           { return _pending_monitorenter; }
   void set_pending_monitorenter(bool b)           { _pending_monitorenter = b; }
   void set_pending_deoptimization(int reason)     { _pending_deoptimization = reason; }
-  void set_pending_failed_speculation(long failed_speculation) { _pending_failed_speculation = failed_speculation; }
+  void set_pending_failed_speculation(jlong failed_speculation) { _pending_failed_speculation = failed_speculation; }
   void set_pending_transfer_to_interpreter(bool b) { _pending_transfer_to_interpreter = b; }
   void set_jvmci_alternate_call_target(address a) { assert(_jvmci._alternate_call_target == NULL, "must be"); _jvmci._alternate_call_target = a; }
   void set_jvmci_implicit_exception_pc(address a) { assert(_jvmci._implicit_exception_pc == NULL, "must be"); _jvmci._implicit_exception_pc = a; }
+
+  virtual bool in_retryable_allocation() const    { return _in_retryable_allocation; }
+  void set_in_retryable_allocation(bool b)        { _in_retryable_allocation = b; }
 #endif // INCLUDE_JVMCI
 
   // Exception handling for compiled methods

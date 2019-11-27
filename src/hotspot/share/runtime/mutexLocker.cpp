@@ -147,6 +147,13 @@ Monitor* CodeHeapStateAnalytics_lock  = NULL;
 
 Mutex*   MetaspaceExpand_lock         = NULL;
 
+#if INCLUDE_JVMCI
+Monitor* JVMCI_lock                   = NULL;
+Mutex*   JVMCIGlobalAlloc_lock        = NULL;
+Mutex*   JVMCIGlobalActive_lock       = NULL;
+#endif
+
+
 #define MAX_NUM_MUTEX 128
 static Monitor * _mutex_array[MAX_NUM_MUTEX];
 static int _num_mutex;
@@ -317,6 +324,11 @@ void mutex_init() {
 #endif
 
   def(CodeHeapStateAnalytics_lock  , PaddedMutex  , leaf,        true,  Monitor::_safepoint_check_never);
+#if INCLUDE_JVMCI
+  def(JVMCI_lock                   , PaddedMonitor, nonleaf+2,   true,  Monitor::_safepoint_check_always);
+  def(JVMCIGlobalAlloc_lock        , PaddedMutex  , nonleaf,     true,  Monitor::_safepoint_check_never);
+  def(JVMCIGlobalActive_lock       , PaddedMutex  , nonleaf-1,   true,  Monitor::_safepoint_check_never);
+#endif
 }
 
 GCMutexLocker::GCMutexLocker(Monitor * mutex) {

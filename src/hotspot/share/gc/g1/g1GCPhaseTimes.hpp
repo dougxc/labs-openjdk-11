@@ -62,9 +62,8 @@ class G1GCPhaseTimes : public CHeapObj<mtGC> {
     ScanHCC,
     ScanRS,
     CodeRoots,
-#if INCLUDE_AOT
-    AOTCodeRoots,
-#endif
+    AOT_ONLY(AOTCodeRoots COMMA)
+    JVMCI_ONLY(JVMCIRoots COMMA)
     ObjCopy,
     Termination,
     Other,

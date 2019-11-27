@@ -35,8 +35,7 @@
 #include "jfr/jfrEvents.hpp"
 #include "jfr/support/jfrThreadId.hpp"
 #if INCLUDE_JVMCI
-#include "jvmci/jvmciCompiler.hpp"
-#include "jvmci/jvmciRuntime.hpp"
+#include "jvmci/jvmci.hpp"
 #endif
 #include "logging/log.hpp"
 #include "logging/logStream.hpp"
@@ -449,15 +448,7 @@ void before_exit(JavaThread* thread) {
   }
 
 #if INCLUDE_JVMCI
-  // We are not using CATCH here because we want the exit to continue normally.
-  Thread* THREAD = thread;
-  JVMCIRuntime::shutdown(THREAD);
-  if (HAS_PENDING_EXCEPTION) {
-    HandleMark hm(THREAD);
-    Handle exception(THREAD, PENDING_EXCEPTION);
-    CLEAR_PENDING_EXCEPTION;
-    java_lang_Throwable::java_printStackTrace(exception, THREAD);
-  }
+  JVMCI::shutdown();
 #endif
 
   // Hang forever on exit if we're reporting an error.
@@ -669,6 +660,8 @@ void vm_shutdown_during_initialization(const char* error, const char* message) {
 JDK_Version JDK_Version::_current;
 const char* JDK_Version::_runtime_name;
 const char* JDK_Version::_runtime_version;
+const char* JDK_Version::_runtime_vendor_version;
+const char* JDK_Version::_runtime_vendor_vm_bug_url;
 
 void JDK_Version::initialize() {
   jdk_version_info info;
